@@ -16,7 +16,10 @@
     </div>
     {% endfor %}
     {{ form.non_field_errors }}
-    <p class="muted">设为「可下槽」时，最新批次实测含水率须已填且 ≤ 40%。</p>
+    <p class="muted">
+      设为「可下槽」时，最新批次实测含水率须已填且 ≤ 40%。<br>
+      改回「装叶中」（清空下一轮）前，该槽的下槽交接卷必须已完成；尚有交接中卷时改回将被拒绝。
+    </p>
     <button class="btn" type="submit">保存</button>
   </form>
 </div>

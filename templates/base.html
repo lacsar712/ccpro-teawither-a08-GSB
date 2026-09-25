@@ -17,6 +17,7 @@
       <a href="{% url 'garden_list' %}" class="{% if 'garden' in request.resolver_match.url_name %}active{% endif %}">茶园</a>
       <a href="{% url 'trough_list' %}" class="{% if 'trough' in request.resolver_match.url_name %}active{% endif %}">萎凋槽</a>
       <a href="{% url 'batch_list' %}" class="{% if 'batch' in request.resolver_match.url_name %}active{% endif %}">萎凋批次</a>
+      <a href="{% url 'handoff_list' %}" class="{% if 'handoff' in request.resolver_match.url_name %}active{% endif %}">下槽交接</a>
     </div>
     <div class="nav-user">
       <span>{{ user.username }}</span>

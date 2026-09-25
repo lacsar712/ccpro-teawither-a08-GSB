@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from .models import Garden, Trough, WitherBatch
+from .models import Garden, Trough, UnloadHandoff, WitherBatch
 
 
 def ensure_seed_data():
@@ -92,3 +92,13 @@ def ensure_seed_data():
     )
     t4.status = Trough.STATUS_READY
     t4.save()
+
+    # 可下槽槽位挂一卷未完成的下槽交接卷（交接中，未填完成时刻）。
+    UnloadHandoff.objects.create(
+        trough=t4,
+        handoffAt=now - timezone.timedelta(minutes=20),
+        receivingTeam="甲班",
+        outKg=Decimal("108.00"),
+        signer="陈交接",
+        completedAt=None,
+    )

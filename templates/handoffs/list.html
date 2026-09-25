@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}下槽交接{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>下槽交接卷</h1>
+  <div class="actions">
+    <button class="btn btn-secondary btn-sm"
+            hx-get="{% url 'handoff_list' %}"
+            hx-target="#handoff-table"
+            hx-swap="innerHTML">刷新列表</button>
+    <a class="btn" href="{% url 'handoff_create' %}">开立交接卷</a>
+  </div>
+</div>
+<div class="card" id="handoff-table">
+  {% include "handoffs/_table.html" %}
+</div>
+<p class="muted" style="margin-top:1rem">
+  规则：仅「可下槽」槽位可开卷；出叶千克须为正且不超过该槽装叶量；同槽未完成卷不可再开。
+  交接须由主管完成，完成时同事务复核该槽最新批次实测含水不空且 ≤ 40%。
+  交接完成后，该槽才允许改回「装叶中」清空下一轮。
+</p>
+{% endblock %}

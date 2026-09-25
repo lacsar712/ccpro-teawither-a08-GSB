@@ -1,8 +1,10 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
+from django.db.models import Exists, OuterRef
 from django.http import HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.views.generic import (
@@ -12,8 +14,8 @@ from django.views.generic import (
     UpdateView,
 )
 
-from .forms import GardenForm, TroughForm, WitherBatchForm
-from .models import Garden, Trough, WitherBatch
+from .forms import GardenForm, TroughForm, UnloadHandoffForm, WitherBatchForm
+from .models import Garden, Trough, UnloadHandoff, WitherBatch
 
 
 def _wants_htmx(request):
@@ -101,7 +103,14 @@ class TroughListView(LoginRequiredMixin, ListView):
     context_object_name = "troughs"
 
     def get_queryset(self):
-        return Trough.objects.select_related("garden").all()
+        open_handoff = UnloadHandoff.objects.filter(
+            trough=OuterRef("pk"), completedAt__isnull=True
+        )
+        return (
+            Trough.objects.select_related("garden")
+            .annotate(has_open_handoff=Exists(open_handoff))
+            .all()
+        )
 
     def get(self, request, *args, **kwargs):
         self.object_list = self.get_queryset()
@@ -200,3 +209,69 @@ class BatchDeleteView(LoginRequiredMixin, DeleteView):
     def form_valid(self, form):
         messages.success(self.request, "萎凋批次已删除")
         return super().form_valid(form)
+
+
+# ---- UnloadHandoff（下槽交接卷） ----
+
+
+class HandoffListView(LoginRequiredMixin, ListView):
+    model = UnloadHandoff
+    template_name = "handoffs/list.html"
+    context_object_name = "handoffs"
+
+    def get_queryset(self):
+        return UnloadHandoff.objects.select_related(
+            "trough", "trough__garden"
+        ).all()
+
+    def get(self, request, *args, **kwargs):
+        self.object_list = self.get_queryset()
+        if _wants_htmx(request):
+            html = render_to_string(
+                "handoffs/_table.html",
+                {"handoffs": self.object_list},
+                request=request,
+            )
+            return HttpResponse(html)
+        return super().get(request, *args, **kwargs)
+
+
+class HandoffCreateView(LoginRequiredMixin, CreateView):
+    model = UnloadHandoff
+    form_class = UnloadHandoffForm
+    template_name = "handoffs/form.html"
+    success_url = reverse_lazy("handoff_list")
+
+    def form_valid(self, form):
+        messages.success(self.request, "下槽交接卷已开立")
+        return super().form_valid(form)
+
+
+@login_required
+def handoff_complete(request, pk):
+    """主管完成交接：同事务复核含水并写入完成时刻。"""
+    handoff = get_object_or_404(
+        UnloadHandoff.objects.select_related("trough"), pk=pk
+    )
+    if request.method != "POST":
+        return render(
+            request,
+            "handoffs/confirm_complete.html",
+            {"handoff": handoff},
+        )
+
+    if not request.user.is_staff:
+        messages.error(request, "仅主管可完成下槽交接。")
+        return redirect("handoff_list")
+    if handoff.completedAt is not None:
+        messages.info(request, "该交接卷已完成。")
+        return redirect("handoff_list")
+
+    try:
+        handoff.complete(request.user)
+    except ValidationError as exc:
+        messages.error(request, "；".join(exc.messages))
+        return redirect("handoff_list")
+
+    messages.success(request, "下槽交接已完成，该槽现可改回「装叶中」清空下一轮。")
+    return redirect("handoff_list")

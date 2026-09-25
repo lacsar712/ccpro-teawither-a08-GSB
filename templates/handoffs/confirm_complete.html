@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}完成下槽交接{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>完成下槽交接</h1>
+  <a class="btn btn-secondary" href="{% url 'handoff_list' %}">返回列表</a>
+</div>
+<div class="card">
+  <p>确认由主管完成以下交接卷？完成时将同事务复核该槽最新批次实测含水率（须已填且 ≤ 40%），并写入完成时刻。</p>
+  <table class="data" style="max-width:640px">
+    <tr><th>所属槽位</th><td>{{ handoff.trough.garden.name }} / {{ handoff.trough.troughCode }}</td></tr>
+    <tr><th>交接时刻</th><td>{{ handoff.handoffAt|date:"Y-m-d H:i" }}</td></tr>
+    <tr><th>接收班组</th><td>{{ handoff.receivingTeam }}</td></tr>
+    <tr><th>出叶千克</th><td>{{ handoff.outKg }} kg</td></tr>
+    <tr><th>签字人</th><td>{{ handoff.signer }}</td></tr>
+  </table>
+  <p class="muted" style="margin-top:1rem">
+    完成后该槽方可改回「装叶中」清空下一轮；若最新批次实测含水为空或高于 40%，将拒绝完成。
+  </p>
+  <form method="post" class="actions" style="margin-top:1rem">
+    {% csrf_token %}
+    <button class="btn" type="submit">确认完成交接</button>
+    <a class="btn btn-secondary" href="{% url 'handoff_list' %}">取消</a>
+  </form>
+</div>
+{% endblock %}

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Garden, Trough, WitherBatch
+from .models import Garden, Trough, UnloadHandoff, WitherBatch
 
 
 @admin.register(Garden)
@@ -27,3 +27,18 @@ class WitherBatchAdmin(admin.ModelAdmin):
         "rollGrade",
     )
     list_filter = ("rollGrade",)
+
+
+@admin.register(UnloadHandoff)
+class UnloadHandoffAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "trough",
+        "handoffAt",
+        "receivingTeam",
+        "outKg",
+        "signer",
+        "completedAt",
+    )
+    list_filter = ("receivingTeam", "completedAt")
+    search_fields = ("trough__troughCode", "receivingTeam", "signer")

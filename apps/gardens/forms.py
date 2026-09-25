@@ -1,6 +1,7 @@
 from django import forms
+from django.utils import timezone
 
-from .models import Garden, Trough, WitherBatch
+from .models import Garden, Trough, UnloadHandoff, WitherBatch
 
 
 class GardenForm(forms.ModelForm):
@@ -60,7 +61,49 @@ class WitherBatchForm(forms.ModelForm):
             "%Y-%m-%d %H:%M",
         ]
         if self.instance and self.instance.pk and self.instance.startedAt:
-            from django.utils import timezone
-
             local = timezone.localtime(self.instance.startedAt)
             self.initial["startedAt"] = local.strftime("%Y-%m-%dT%H:%M")
+
+
+class UnloadHandoffForm(forms.ModelForm):
+    class Meta:
+        model = UnloadHandoff
+        fields = [
+            "trough",
+            "handoffAt",
+            "receivingTeam",
+            "outKg",
+            "signer",
+        ]
+        widgets = {
+            "trough": forms.Select(attrs={"class": "input"}),
+            "handoffAt": forms.DateTimeInput(
+                attrs={"class": "input", "type": "datetime-local"},
+                format="%Y-%m-%dT%H:%M",
+            ),
+            "receivingTeam": forms.TextInput(attrs={"class": "input"}),
+            "outKg": forms.NumberInput(attrs={"class": "input", "step": "0.01"}),
+            "signer": forms.TextInput(attrs={"class": "input"}),
+        }
+        help_texts = {
+            "trough": "仅「可下槽」槽位可开卷；同槽有未完成卷时不可再开。",
+            "outKg": "须为正数，且不得超过该槽装叶量。",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["handoffAt"].input_formats = [
+            "%Y-%m-%dT%H:%M",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+        ]
+        if not self.initial.get("handoffAt"):
+            self.initial["handoffAt"] = timezone.localtime(timezone.now()).strftime(
+                "%Y-%m-%dT%H:%M"
+            )
+        # 开卷只允许选择可下槽槽位。
+        self.fields["trough"].queryset = (
+            Trough.objects.filter(status=Trough.STATUS_READY)
+            .select_related("garden")
+            .order_by("garden__name", "troughCode")
+        )

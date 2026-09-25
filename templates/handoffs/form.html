@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}开立下槽交接卷{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>开立下槽交接卷</h1>
+  <a class="btn btn-secondary" href="{% url 'handoff_list' %}">返回列表</a>
+</div>
+<div class="card">
+  <form method="post" class="form-grid">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="form-row">
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+      {% if field.help_text %}<p class="muted" style="margin:.25rem 0 0;font-size:.85rem">{{ field.help_text }}</p>{% endif %}
+      {{ field.errors }}
+    </div>
+    {% endfor %}
+    {{ form.non_field_errors }}
+    <p class="muted">
+      开卷前置：槽位须为「可下槽」；出叶千克须为正且不超过该槽装叶量；同槽已有未完成卷时不可再开。
+      交接卷完成后，该槽才能改回「装叶中」清空下一轮。
+    </p>
+    <button class="btn" type="submit">开立交接卷</button>
+  </form>
+</div>
+{% endblock %}

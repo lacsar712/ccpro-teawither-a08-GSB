@@ -216,6 +216,16 @@ table.data tr:hover td {
   color: #004085;
 }
 
+.badge-handoff {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.badge-done {
+  background: #d4edda;
+  color: #155724;
+}
+
 .form-grid {
   display: grid;
   gap: 0.85rem;
