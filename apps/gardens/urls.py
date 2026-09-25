@@ -40,4 +40,11 @@ urlpatterns = [
         views.BatchDeleteView.as_view(),
         name="batch_delete",
     ),
+    path("handovers/", views.HandoverListView.as_view(), name="handover_list"),
+    path("handovers/new/", views.HandoverCreateView.as_view(), name="handover_create"),
+    path(
+        "handovers/<int:pk>/complete/",
+        views.handover_complete,
+        name="handover_complete",
+    ),
 ]

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}开卷{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>开具下槽交接卷</h1>
+  <a class="btn btn-secondary" href="{% url 'handover_list' %}">返回列表</a>
+</div>
+<div class="card">
+  <form method="post" class="form-grid">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="form-row">
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+      {{ field.errors }}
+    </div>
+    {% endfor %}
+    {{ form.non_field_errors }}
+    <p class="muted">
+      开卷时槽位必须为「可下槽」，且同槽无未完成交接卷；出叶千克须为正数且不得超过该槽装叶量。
+      开卷后须由主管完成交接，<strong>完成交接后方可把槽位改回「装叶中」</strong>。
+    </p>
+    {% if openable_trough_count == 0 %}
+    <p class="errornote">当前没有「可下槽」且无未完成交接卷的槽位，暂不能开卷。</p>
+    {% endif %}
+    <button class="btn" type="submit">开卷</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% if handovers %}
+<table class="data">
+  <thead>
+    <tr>
+      <th>所属槽位</th>
+      <th>交接时刻</th>
+      <th>接收班组</th>
+      <th>出叶千克</th>
+      <th>签字人</th>
+      <th>状态</th>
+      <th>完成时刻</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for h in handovers %}
+    <tr>
+      <td>{{ h.trough }}</td>
+      <td>{{ h.handedAt|date:"Y-m-d H:i" }}</td>
+      <td>{{ h.receiverTeam }}</td>
+      <td>{{ h.outputKg }}</td>
+      <td>{{ h.signer }}</td>
+      <td>
+        {% if h.is_open %}
+        <span class="badge badge-handover-open">交接中</span>
+        {% else %}
+        <span class="badge badge-handover-done">已完成</span>
+        {% endif %}
+      </td>
+      <td>{% if h.completedAt %}{{ h.completedAt|date:"Y-m-d H:i" }}{% else %}—{% endif %}</td>
+      <td class="actions">
+        {% if h.is_open %}
+          {% if user.is_staff %}
+          <a class="btn btn-sm" href="{% url 'handover_complete' h.pk %}">完成交接</a>
+          {% else %}
+          <span class="muted">仅主管可完成</span>
+          {% endif %}
+        {% else %}
+        <span class="muted">—</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">暂无下槽交接卷。</p>
+{% endif %}

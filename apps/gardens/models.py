@@ -1,5 +1,7 @@
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
+from django.db.models import Q
+from django.utils import timezone
 
 
 class Garden(models.Model):
@@ -59,18 +61,24 @@ class Trough(models.Model):
     def latest_batch(self):
         return self.batches.order_by("-startedAt", "-id").first()
 
+    def has_open_handover(self):
+        return self.handovers.filter(completedAt__isnull=True).exists()
+
     def clean(self):
         super().clean()
+        if self.pk and self.status == self.STATUS_LOADING:
+            # 改回「装叶中」前置：该槽不得存在未完成的下槽交接卷
+            if UnloadHandover.objects.filter(
+                trough_id=self.pk, completedAt__isnull=True
+            ).exists():
+                raise ValidationError(
+                    {
+                        "status": "该槽存在未完成的下槽交接卷，须完成交接后方可改回「装叶中」清空下一轮。"
+                    }
+                )
         if self.status != self.STATUS_READY:
             return
-        latest = None
-        if self.pk:
-            latest = (
-                WitherBatch.objects.filter(trough_id=self.pk)
-                .order_by("-startedAt", "-id")
-                .first()
-            )
-        if latest is None or latest.actualMoisture is None or latest.actualMoisture > 40:
+        if not latest_batch_moisture_ok(self):
             raise ValidationError(
                 {
                     "status": "无法设为可下槽：最新萎凋批次的实测含水率为空或高于 40%。"
@@ -109,3 +117,90 @@ class WitherBatch(models.Model):
 
     def __str__(self):
         return f"{self.trough} @ {self.startedAt:%Y-%m-%d %H:%M}"
+
+
+def latest_batch_moisture_ok(trough):
+    """设为可下槽 / 完成交接共用判定：最新批次实测含水不空且不高于 40。"""
+    latest = (
+        WitherBatch.objects.filter(trough_id=trough.pk)
+        .order_by("-startedAt", "-id")
+        .first()
+    )
+    return (
+        latest is not None
+        and latest.actualMoisture is not None
+        and latest.actualMoisture <= 40
+    )
+
+
+class UnloadHandover(models.Model):
+    """下槽交接卷：挂在可下槽槽位上，完成交接后槽位才允许改回装叶中。"""
+
+    trough = models.ForeignKey(
+        Trough,
+        on_delete=models.CASCADE,
+        related_name="handovers",
+        verbose_name="所属槽位",
+    )
+    handedAt = models.DateTimeField("交接时刻", default=timezone.now)
+    receiverTeam = models.CharField("接收班组", max_length=80)
+    outputKg = models.DecimalField("出叶千克", max_digits=10, decimal_places=2)
+    signer = models.CharField("签字人", max_length=80)
+    completedAt = models.DateTimeField("完成时刻", null=True, blank=True)
+
+    class Meta:
+        ordering = ["-handedAt", "-id"]
+        verbose_name = "下槽交接卷"
+        verbose_name_plural = "下槽交接卷"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trough"],
+                condition=Q(completedAt__isnull=True),
+                name="uniq_open_handover_per_trough",
+            ),
+        ]
+
+    def __str__(self):
+        state = "交接中" if self.completedAt is None else "已完成"
+        return f"{self.trough} 下槽交接卷({state})"
+
+    @property
+    def is_open(self):
+        return self.completedAt is None
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.trough_id and self.trough.status != Trough.STATUS_READY:
+            errors["trough"] = "开卷时槽位必须为「可下槽」。"
+        if self.outputKg is not None:
+            if self.outputKg <= 0:
+                errors["outputKg"] = "出叶千克须为正数。"
+            elif self.trough_id and self.outputKg > self.trough.loadKg:
+                errors["outputKg"] = "出叶千克不得超过该槽装叶量。"
+        if self.trough_id and UnloadHandover.objects.filter(
+            trough_id=self.trough_id, completedAt__isnull=True
+        ).exclude(pk=self.pk).exists():
+            errors["trough"] = "该槽已有未完成的交接卷，不可再开。"
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def complete(self):
+        """主管完成交接：同事务内复用含水判定后写入完成时刻。"""
+        with transaction.atomic():
+            locked = UnloadHandover.objects.select_for_update().get(pk=self.pk)
+            if locked.completedAt is not None:
+                raise ValidationError("该交接卷已完成，不可重复完成。")
+            trough = Trough.objects.select_for_update().get(pk=locked.trough_id)
+            if not latest_batch_moisture_ok(trough):
+                raise ValidationError(
+                    "无法完成交接：该槽最新批次实测含水率为空或高于 40%。"
+                )
+            locked.completedAt = timezone.now()
+            locked.save()
+        self.completedAt = locked.completedAt
+        return locked

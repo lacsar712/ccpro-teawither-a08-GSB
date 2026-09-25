@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}完成交接{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>完成下槽交接</h1>
+  <a class="btn btn-secondary" href="{% url 'handover_list' %}">返回列表</a>
+</div>
+<div class="card">
+  <p>确认完成 <strong>{{ handover.trough }}</strong> 的下槽交接卷？</p>
+  <table class="data" style="margin-bottom:1rem">
+    <tr><th>所属槽位</th><td>{{ handover.trough }}</td></tr>
+    <tr><th>交接时刻</th><td>{{ handover.handedAt|date:"Y-m-d H:i" }}</td></tr>
+    <tr><th>接收班组</th><td>{{ handover.receiverTeam }}</td></tr>
+    <tr><th>出叶千克</th><td>{{ handover.outputKg }}</td></tr>
+    <tr><th>签字人</th><td>{{ handover.signer }}</td></tr>
+  </table>
+  <p class="muted">
+    完成交接将写入完成时刻。完成时同事务校验：该槽最新批次实测含水率须不空且不高于 40%。
+    校验通过后，该槽才可由「可下槽」改回「装叶中」清空下一轮。
+  </p>
+  <form method="post" class="actions">
+    {% csrf_token %}
+    <button class="btn" type="submit">确认完成交接</button>
+    <a class="btn btn-secondary" href="{% url 'handover_list' %}">取消</a>
+  </form>
+</div>
+{% endblock %}

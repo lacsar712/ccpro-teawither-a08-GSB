@@ -53,8 +53,17 @@ python manage.py runserver 0.0.0.0:4100
 1. **Garden（茶园）**：`name`、`altitudeBand`、`notes`
 2. **Trough（萎凋槽）**：归属茶园、`troughCode`、`cultivar`、`loadKg`、状态 `loading|withering|ready`；同一茶园内槽位编号唯一
 3. **WitherBatch（萎凋批次）**：归属槽位、`startedAt`、`targetMoisture`、`actualMoisture`（可空）、`rollGrade`
+4. **UnloadHandover（下槽交接卷）**：归属槽位、`handedAt`（交接时刻）、`receiverTeam`（接收班组）、`outputKg`（出叶千克）、`signer`（签字人）、`completedAt`（完成时刻，可空）
 
-**业务规则**：将槽位状态设为 `ready`（可下槽）时，若最新批次的 `actualMoisture` 为空或大于 40，抛出中文 `ValidationError`。
+**业务规则**：
+
+- 将槽位状态设为 `ready`（可下槽）时，若最新批次的 `actualMoisture` 为空或大于 40，抛出中文 `ValidationError`。
+- 交接卷只能开在「可下槽」槽位上；同一槽位存在未完成交接卷时不可再开（数据库部分唯一约束兜底）。
+- 开卷时 `outputKg` 须为正数且不得超过该槽 `loadKg`（装叶量）。
+- **完成交接仅主管**（`is_staff`）可操作：同事务内对该槽最新批次复用同一判定——实测含水率不空且 ≤ 40，通过后写入 `completedAt`。
+- **完成交接后**才允许把该槽从「可下槽」改回「装叶中」清空下一轮；存在未完成交接卷时改回「装叶中」抛出中文 `ValidationError`。
+
+只开卷不拦截改回、或完成交接时不校验含水率，均视为规则未落实。
 
 ## 种子数据
 

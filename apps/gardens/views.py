@@ -1,8 +1,11 @@
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
+from django.db.models import Exists, OuterRef
 from django.http import HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.views.generic import (
@@ -12,8 +15,8 @@ from django.views.generic import (
     UpdateView,
 )
 
-from .forms import GardenForm, TroughForm, WitherBatchForm
-from .models import Garden, Trough, WitherBatch
+from .forms import GardenForm, TroughForm, UnloadHandoverForm, WitherBatchForm
+from .models import Garden, Trough, UnloadHandover, WitherBatch
 
 
 def _wants_htmx(request):
@@ -32,6 +35,9 @@ def home(request):
         ).count(),
         "loading_count": Trough.objects.filter(
             status=Trough.STATUS_LOADING
+        ).count(),
+        "open_handover_count": UnloadHandover.objects.filter(
+            completedAt__isnull=True
         ).count(),
     }
     return render(request, "home.html", context)
@@ -101,7 +107,14 @@ class TroughListView(LoginRequiredMixin, ListView):
     context_object_name = "troughs"
 
     def get_queryset(self):
-        return Trough.objects.select_related("garden").all()
+        open_handover = UnloadHandover.objects.filter(
+            trough=OuterRef("pk"), completedAt__isnull=True
+        )
+        return (
+            Trough.objects.select_related("garden")
+            .annotate(handover_open=Exists(open_handover))
+            .all()
+        )
 
     def get(self, request, *args, **kwargs):
         self.object_list = self.get_queryset()
@@ -200,3 +213,72 @@ class BatchDeleteView(LoginRequiredMixin, DeleteView):
     def form_valid(self, form):
         messages.success(self.request, "萎凋批次已删除")
         return super().form_valid(form)
+
+
+# ---- UnloadHandover ----
+
+
+class HandoverListView(LoginRequiredMixin, ListView):
+    model = UnloadHandover
+    template_name = "handovers/list.html"
+    context_object_name = "handovers"
+
+    def get_queryset(self):
+        return UnloadHandover.objects.select_related(
+            "trough", "trough__garden"
+        ).all()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["open_count"] = sum(1 for h in context["handovers"] if h.is_open)
+        return context
+
+    def get(self, request, *args, **kwargs):
+        self.object_list = self.get_queryset()
+        if _wants_htmx(request):
+            html = render_to_string(
+                "handovers/_table.html",
+                {"handovers": self.object_list},
+                request=request,
+            )
+            return HttpResponse(html)
+        return super().get(request, *args, **kwargs)
+
+
+class HandoverCreateView(LoginRequiredMixin, CreateView):
+    model = UnloadHandover
+    form_class = UnloadHandoverForm
+    template_name = "handovers/form.html"
+    success_url = reverse_lazy("handover_list")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        open_handover = UnloadHandover.objects.filter(
+            trough=OuterRef("pk"), completedAt__isnull=True
+        )
+        context["openable_trough_count"] = (
+            Trough.objects.filter(status=Trough.STATUS_READY)
+            .annotate(has_open_handover=Exists(open_handover))
+            .filter(has_open_handover=False)
+            .count()
+        )
+        return context
+
+    def form_valid(self, form):
+        messages.success(self.request, "下槽交接卷已开具，等待主管完成交接。")
+        return super().form_valid(form)
+
+
+@login_required
+@staff_member_required
+def handover_complete(request, pk):
+    handover = get_object_or_404(UnloadHandover.objects.select_related("trough"), pk=pk)
+    if request.method == "POST":
+        try:
+            handover.complete()
+        except ValidationError as exc:
+            messages.error(request, " ".join(exc.messages))
+            return redirect("handover_list")
+        messages.success(request, "交接已完成，该槽位现在可以改回「装叶中」清空下一轮。")
+        return redirect("handover_list")
+    return render(request, "handovers/complete.html", {"handover": handover})

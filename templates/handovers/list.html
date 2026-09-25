@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}下槽交接{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>下槽交接卷</h1>
+  <div class="actions">
+    <button class="btn btn-secondary btn-sm"
+            hx-get="{% url 'handover_list' %}"
+            hx-target="#handover-table"
+            hx-swap="innerHTML">刷新列表</button>
+    <a class="btn" href="{% url 'handover_create' %}">开卷</a>
+  </div>
+</div>
+<p class="muted" style="margin-bottom:1rem">
+  交接卷挂在「可下槽」槽位上；同槽未完成卷不可再开。完成交接仅主管可操作，完成时该槽最新批次实测含水须不空且不高于 40%。
+  <strong>完成交接后，才允许把槽位从「可下槽」改回「装叶中」清空下一轮</strong>；交接未完成时改回「装叶中」将被拒绝。
+</p>
+<div class="card" id="handover-table">
+  {% include "handovers/_table.html" %}
+</div>
+{% endblock %}
